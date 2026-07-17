@@ -71,6 +71,52 @@ def load_sales_summary(file_name: str = "sales_summary.csv") -> dict[str, object
         "gross_margin_pct": round(gross_profit / revenue * 100, 2) if revenue else 0.0
     }
 
+@mcp.tool
+def sales_by_region(file_name: str = "sales_summary.csv") -> dict[str, object]:
+    region_stats: dict[str, dict[str, float]] = {}
+
+    with safe_csv_path(file_name).open(encoding="utf-8", newline="") as file:
+        reader = csv.DictReader(file)
+
+        required_columns = {"region", "quantity", "unit_price", "cost_per_unit"}
+        missing_columns = required_columns.difference(reader.fieldnames or [])
+
+        if missing_columns:
+            raise ValueError(f"Missing CSV columns {sorted(missing_columns)}")
+
+        for row in reader:
+            region = row["region"]
+            quantity = int(row["quantity"])
+            unit_price = float(row["unit_price"])
+            cost_per_unit = float(row["cost_per_unit"])
+
+            stats = region_stats.setdefault(
+                region, {"orders": 0, "revenue_uah": 0.0, "gross_profit_uah": 0.0}
+            )
+            stats["orders"] += 1
+            stats["revenue_uah"] += quantity * unit_price
+            stats["gross_profit_uah"] += quantity * (unit_price - cost_per_unit)
+
+    regions = [
+        {
+            "region": region,
+            "orders": int(stats["orders"]),
+            "revenue_uah": round(stats["revenue_uah"], 2),
+            "gross_profit_uah": round(stats["gross_profit_uah"], 2),
+        }
+        for region, stats in region_stats.items()
+    ]
+    regions.sort(key=lambda item: item["revenue_uah"], reverse=True)
+
+    return {
+        "file": file_name,
+        "regions": regions,
+    }
+
+
+
+
+
 @mcp.resource("sales://metrics-definitions")
 def metric_definitions_resource() -> str:
     return """
